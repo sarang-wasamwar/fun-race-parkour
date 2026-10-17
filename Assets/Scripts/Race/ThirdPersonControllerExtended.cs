@@ -31,7 +31,7 @@ namespace FunRaceParkour
         // ── Movement ───────────────────────────────────────────────────────
         [Header("Movement")]
         [Tooltip("Normal move speed in m/s — same value for player and AI.")]
-        public float MoveSpeed = 4.0f;
+        public float MoveSpeed = 2.0f;
         [Tooltip("Acceleration / deceleration rate.")]
         public float SpeedChangeRate = 10.0f;
 
@@ -60,8 +60,9 @@ namespace FunRaceParkour
         public GameObject CinemachineCameraTarget;
         public float      TopClamp           = 70.0f;
         public float      BottomClamp        = -30.0f;
-        public float      CameraAngleOverride = 0.0f;
-        public bool       LockCameraPosition = false;
+        public float      CameraAngleOverride = 12.0f;
+        public bool       LockCameraPosition = true;
+        public float      FixedCameraYaw     = 90.0f;
         public Vector2    LookSensitivity    = new Vector2(7.5f, 5.0f);
 
         // ── Runtime ────────────────────────────────────────────────────────
@@ -148,21 +149,18 @@ namespace FunRaceParkour
             _jumpTimeoutDelta = JumpTimeout;
             _fallTimeoutDelta = FallTimeout;
 
-            if (startPoint == null || endPoint == null)
-            {
-                Debug.LogError($"[{name}] ThirdPersonControllerExtended: startPoint or endPoint is null.", this);
-                enabled = false;
-                return;
-            }
+            if (startPoint != null && endPoint != null)
+                InitPath();
 
-            InitPath();
+            float lookScale = PlayerPrefs.GetFloat("FRP_Sensitivity", LookSensitivity.x);
+            LookSensitivity = new Vector2(lookScale, lookScale * 0.67f);
         }
 
         private void InitPath()
         {
             _pathStartX = startPoint.position.x;
             _pathEndX   = endPoint.position.x;
-            _pathZ      = startPoint.position.z;
+            _pathZ      = transform.position.z;
             _pathY      = transform.position.y;
         }
 
@@ -323,7 +321,7 @@ namespace FunRaceParkour
 
             if (IsRespawning)
             {
-                _cinemachineTargetYaw   = 0f;
+                _cinemachineTargetYaw   = FixedCameraYaw;
                 _cinemachineTargetPitch = 0f;
                 CinemachineCameraTarget.transform.position = _cameraStartPos;
                 CinemachineCameraTarget.transform.rotation = _cameraStartRot;
@@ -331,11 +329,16 @@ namespace FunRaceParkour
                 return;
             }
 
-            if (_legacyInput != null && _legacyInput.look.sqrMagnitude >= _threshold && !LockCameraPosition)
+            if (!LockCameraPosition && _legacyInput != null && _legacyInput.look.sqrMagnitude >= _threshold)
             {
                 float dtMul = IsCurrentDeviceMouse ? 1f : Time.deltaTime;
                 _cinemachineTargetYaw   += _legacyInput.look.x * dtMul * LookSensitivity.x;
                 _cinemachineTargetPitch += _legacyInput.look.y * dtMul * LookSensitivity.y;
+            }
+            else if (LockCameraPosition)
+            {
+                _cinemachineTargetYaw = FixedCameraYaw;
+                _cinemachineTargetPitch = 0f;
             }
 
             _cinemachineTargetYaw   = ClampAngle(_cinemachineTargetYaw,   float.MinValue, float.MaxValue);

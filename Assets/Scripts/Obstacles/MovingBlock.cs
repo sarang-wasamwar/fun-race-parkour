@@ -10,10 +10,10 @@ namespace FunRaceParkour
     public class MovingBlock : HazardBase, IPredictableHazard
     {
         [Header("Moving Block")]
-        [SerializeField] private Transform pointA;
-        [SerializeField] private Transform pointB;
+        [SerializeField, Tooltip("First endpoint of the patrol path.")] private Transform pointA;
+        [SerializeField, Tooltip("Second endpoint of the patrol path.")] private Transform pointB;
 
-        [SerializeField, Range(0.5f, 20f)]
+        [SerializeField, Range(0.5f, 20f), Tooltip("Patrol speed in units per second.")]
         private float speed = 3f;
 
         [SerializeField, Range(0f, 2f), Tooltip("Pause at each end in seconds.")]
@@ -24,6 +24,8 @@ namespace FunRaceParkour
         private Vector3    _startB;
         private float      _period;     // time for one full A→B→A cycle
         private Vector3    _initialPos;
+        private float      _startTime;
+        private bool       _initialised;
 
         private void Awake()
         {
@@ -31,6 +33,7 @@ namespace FunRaceParkour
             _rb.isKinematic   = true;
             _rb.interpolation = RigidbodyInterpolation.Interpolate;
             _initialPos       = transform.position;
+            _startTime        = Time.time;
         }
 
         private void Start()
@@ -42,6 +45,7 @@ namespace FunRaceParkour
             }
             _startA = pointA.position;
             _startB = pointB.position;
+            _initialised = true;
             float dist = Vector3.Distance(_startA, _startB);
             if (dist > 0f)
                 _period = (dist / speed) * 2f + pauseAtEnds * 2f;
@@ -49,10 +53,13 @@ namespace FunRaceParkour
 
         private void FixedUpdate()
         {
-            _rb.MovePosition(ComputePosition(Time.fixedTime));
+            _rb.MovePosition(ComputePosition(Time.time - _startTime));
         }
 
-        private void OnCollisionEnter(Collision col) => TryHitRacer(col.gameObject, impactImpulse);
+        protected override void OnCollisionEnter(Collision col)
+        {
+            base.OnCollisionEnter(col);
+        }
 
         // ── Deterministic position ────────────────────────────────────────
         private Vector3 ComputePosition(float t)
@@ -91,7 +98,7 @@ namespace FunRaceParkour
             float step = 0.05f;
             for (float dt = timeFromNow; dt <= timeFromNow + crossDuration; dt += step)
             {
-                Vector3 pos = ComputePosition(now + dt);
+                Vector3 pos = ComputePosition(now + dt - _startTime);
                 if (IsAtDangerX(pos.x, xPosition)) return false;
             }
             return true;
@@ -104,7 +111,7 @@ namespace FunRaceParkour
             float safeStart = -1f;
             for (float t = 0f; t <= searchHorizon; t += step)
             {
-                Vector3 pos = ComputePosition(now + t);
+                Vector3 pos = ComputePosition(now + t - _startTime);
                 bool safe   = !IsAtDangerX(pos.x, xPosition);
                 if (safe && safeStart < 0f) safeStart = t;
                 else if (!safe && safeStart >= 0f)
@@ -120,8 +127,9 @@ namespace FunRaceParkour
         // ── IResettableObstacle ───────────────────────────────────────────
         public override void ResetState()
         {
-            if (_rb != null && _startA != Vector3.zero)
-                _rb.MovePosition(_startA);
+            if (!_initialised) return;
+            _startTime = Time.time;
+            if (_rb != null) _rb.MovePosition(_startA);
         }
     }
 }

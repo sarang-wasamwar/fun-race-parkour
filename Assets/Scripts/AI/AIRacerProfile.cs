@@ -33,5 +33,11 @@ namespace FunRaceParkour
         [Header("Risk")]
         [Tooltip("Extra time multiplier for safe window requirement. 1.0 = exact, 1.5 = cautious.")]
         [Range(1f, 2.5f)] public float safeWindowMultiplier = 1.5f;
+
+        [Tooltip("0 = cautious waits, 1 = more willing to enter a tight window. Never changes speed.")]
+        [Range(0f, 1f)] public float riskTolerance = 0.4f;
+
+        [Tooltip("Seconds of back-step / pause used during stuck recovery.")]
+        [Range(0.2f, 2f)] public float recoveryDelay = 0.8f;
     }
 }

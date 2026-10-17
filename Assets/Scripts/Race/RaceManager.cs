@@ -5,8 +5,8 @@
 
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 namespace FunRaceParkour
@@ -46,6 +46,7 @@ namespace FunRaceParkour
 
         private float _totalDistance;
         private int   _finishedCount;
+        private int   _nextFinishOrder;
 
         // Events for HUD / ProgressionService
         public event System.Action<RaceState>  OnStateChanged;
@@ -90,11 +91,23 @@ namespace FunRaceParkour
             if (Instance == this) Instance = null;
         }
 
-        private IEnumerator Start()
+        private void Start()
         {
-            yield return null; // let scene fully initialise
+            SetSelectedLevelFromScene();
             SpawnRacers();
-            yield return StartCoroutine(CountdownRoutine());
+            BindPlayerCamera();
+            StartCoroutine(CountdownRoutine());
+        }
+
+        private static void SetSelectedLevelFromScene()
+        {
+            if (GameSession.Instance == null) return;
+            switch (SceneManager.GetActiveScene().name)
+            {
+                case "Level1_TrainingRun": GameSession.Instance.SelectedLevel = 0; break;
+                case "Level2_MechanicalMayhem": GameSession.Instance.SelectedLevel = 1; break;
+                case "Level3_UltimateGauntlet": GameSession.Instance.SelectedLevel = 2; break;
+            }
         }
 
         private void Update()
@@ -132,36 +145,28 @@ namespace FunRaceParkour
                 var go = Instantiate(cfg.prefab, spawnPos, spawnRot);
                 go.name = cfg.name;
 
-                // Apply lane-specific Z for the path
+                RacerSetup.Prepare(go, cfg.isPlayer, cfg.isPlayer ? null : LoadAiProfile(i));
+
                 var ctrl = go.GetComponent<ThirdPersonControllerExtended>();
                 if (ctrl != null)
                 {
-                    // Assign path markers (we adjust the startPoint Z per-racer via a temporary wrapper)
                     ctrl.startPoint = startPoint;
                     ctrl.endPoint   = endPoint;
-                    // Override pathZ to this lane's Z (done in InitPath called by ResetForRace below)
                 }
 
-                // Colour the racer via a material instance
-                ApplyRacerColor(go, cfg.color);
+                var starter = go.GetComponent<StarterAssets.ThirdPersonController>();
+                if (starter != null)
+                {
+                    starter.startPoint = startPoint;
+                    starter.endPoint   = endPoint;
+                }
 
-                // Add world-space name label
+                ApplyRacerColor(go, cfg.color);
                 AddNameLabel(go, cfg.name, cfg.color);
 
-                // Set up input seam
-                IRacerInput inputSeam = go.GetComponent<IRacerInput>() as MonoBehaviour as IRacerInput;
+                IRacerInput inputSeam = go.GetComponent<IRacerInput>();
                 if (inputSeam == null)
-                    inputSeam = go.GetComponentInChildren<IRacerInput>() as MonoBehaviour as IRacerInput;
-
-                // Disable player tag / PlayerInput on AI prefabs
-                if (!cfg.isPlayer)
-                {
-                    go.tag = "Untagged";
-#if ENABLE_INPUT_SYSTEM
-                    var pi = go.GetComponent<UnityEngine.InputSystem.PlayerInput>();
-                    if (pi != null) Destroy(pi);
-#endif
-                }
+                    inputSeam = go.GetComponentInChildren<IRacerInput>();
 
                 var data = new RacerData
                 {
@@ -169,6 +174,7 @@ namespace FunRaceParkour
                     color          = cfg.color,
                     racerObject    = go,
                     controller     = ctrl,
+                    starterController = starter,
                     inputSource    = inputSeam,
                     spawnPosition  = spawnPos,
                     spawnRotation  = spawnRot,
@@ -196,10 +202,58 @@ namespace FunRaceParkour
                 // Lock input until GO
                 LockRacer(data, true);
 
-                if (ctrl != null) ctrl.ResetForRace(spawnPos, spawnRot);
+                RacerSetup.ResetBody(data, spawnPos, spawnRot);
             }
 
             if (raceHUD != null) raceHUD.Initialise(Racers);
+        }
+
+        private static AIRacerProfile LoadAiProfile(int racerIndex)
+        {
+            string path = racerIndex == 0
+                ? "Assets/ScriptableObjects/AI/AIRacer_Aggressive.asset"
+                : "Assets/ScriptableObjects/AI/AIRacer_Cautious.asset";
+#if UNITY_EDITOR
+            var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<AIRacerProfile>(path);
+            if (asset != null) return asset;
+#endif
+            var runtime = ScriptableObject.CreateInstance<AIRacerProfile>();
+            if (racerIndex == 0)
+            {
+                runtime.reactionTime = 0.08f;
+                runtime.jumpTimingError = 0.04f;
+                runtime.safetyMargin = 0.08f;
+                runtime.riskTolerance = 0.7f;
+                runtime.safeWindowMultiplier = 1.1f;
+            }
+            else
+            {
+                runtime.reactionTime = 0.25f;
+                runtime.jumpTimingError = 0.12f;
+                runtime.safetyMargin = 0.22f;
+                runtime.riskTolerance = 0.2f;
+                runtime.safeWindowMultiplier = 1.6f;
+            }
+            return runtime;
+        }
+
+        private void BindPlayerCamera()
+        {
+            GameObject player = null;
+            foreach (var d in Racers)
+            {
+                if (d.racerObject != null && d.racerObject.CompareTag("Player"))
+                {
+                    player = d.racerObject;
+                    break;
+                }
+            }
+            if (player == null) return;
+
+            var target = player.transform.Find("PlayerCameraRoot");
+            var vcam = FindFirstObjectByType<Unity.Cinemachine.CinemachineCamera>();
+            if (vcam != null && target != null)
+                vcam.Follow = target;
         }
 
         private void ApplyRacerColor(GameObject go, Color color)
@@ -266,6 +320,7 @@ namespace FunRaceParkour
         {
             RaceTimer = 0f;
             _finishedCount = 0;
+            _nextFinishOrder = 0;
             foreach (var d in Racers) { d.ResetForRace(); LockRacer(d, false); }
             ChangeState(RaceState.Racing);
         }
@@ -286,6 +341,7 @@ namespace FunRaceParkour
                     float dx = d.racerObject.transform.position.x - startX;
                     float total = endX - startX;
                     d.progress = Mathf.Clamp01(Mathf.Abs(total) > 0.01f ? dx / total : 0f);
+                    d.elapsedTime = RaceTimer;
                 }
             }
             if (raceHUD != null) raceHUD.UpdateRaceState(Racers, RaceTimer);
@@ -296,15 +352,22 @@ namespace FunRaceParkour
         // ─────────────────────────────────────────────────────────────────
         public RacerData GetRacerData(GameObject go)
         {
+            if (go == null) return null;
+            var root = go.GetComponentInParent<CharacterController>();
+            var rootGo = root != null ? root.gameObject : go;
             foreach (var d in Racers)
-                if (d.racerObject == go) return d;
+            {
+                if (d.racerObject == go || d.racerObject == rootGo) return d;
+                if (d.racerObject != null && go.transform.IsChildOf(d.racerObject.transform))
+                    return d;
+            }
             return null;
         }
 
         public void OnCheckpointReached(RacerData data, int idx)
         {
             OnCheckpoint?.Invoke(data, idx);
-            if (raceHUD != null) raceHUD.ShowCheckpointNotification(data.name);
+            if (raceHUD != null) raceHUD.ShowCheckpointNotification(data.name, idx);
 
             if (data?.racerObject != null && data.racerObject.CompareTag("Player"))
             {
@@ -320,6 +383,7 @@ namespace FunRaceParkour
 
             data.status     = RacerStatus.Finished;
             data.finishTime = RaceTimer;
+            data.finishOrder = _nextFinishOrder++;
             data.progress   = 1f;
             _finishedCount++;
 
@@ -327,7 +391,7 @@ namespace FunRaceParkour
             OnRacerFinishedEvt?.Invoke(data);
 
             // Update progression if this is the player
-            if (go.CompareTag("Player"))
+            if (data.racerObject != null && data.racerObject.CompareTag("Player"))
             {
                 ProgressionService.Instance?.OnPlayerFinished(
                     GameSession.Instance?.SelectedLevel ?? 0, data.finishTime);
@@ -353,13 +417,7 @@ namespace FunRaceParkour
             foreach (var d in Racers)
                 if (d.status == RacerStatus.Racing) { d.status = RacerStatus.DNF; LockRacer(d, true); }
 
-            // Compute rankings: finished (by time) then DNF (by progress)
-            var finished = Racers.Where(d => d.status == RacerStatus.Finished)
-                                  .OrderBy(d => d.finishTime).ToList();
-            var dnf      = Racers.Where(d => d.status == RacerStatus.DNF)
-                                  .OrderByDescending(d => d.progress).ToList();
-            var ranked   = finished.Concat(dnf).ToList();
-            for (int i = 0; i < ranked.Count; i++) ranked[i].finalRank = i + 1;
+            RaceRanking.Rank(Racers);
 
             ChangeState(RaceState.Finished);
             if (raceHUD != null) raceHUD.ShowResults(Racers);
@@ -371,6 +429,7 @@ namespace FunRaceParkour
         // ─────────────────────────────────────────────────────────────────
         public void RequestRespawn(RacerData data)
         {
+            if (State != RaceState.Racing || data == null || data.status != RacerStatus.Racing) return;
             data.falls++;
             StartCoroutine(RespawnRoutine(data));
         }
@@ -381,8 +440,7 @@ namespace FunRaceParkour
             // disable input briefly
             if (data.inputSource != null) data.inputSource.InputLocked = true;
             yield return new WaitForSeconds(respawnDelay);
-            if (data.controller != null)
-                data.controller.ResetForRace(data.lastCheckpointPos, data.lastCheckpointRot);
+            RacerSetup.ResetBody(data, data.lastCheckpointPos, data.lastCheckpointRot);
             if (data.inputSource != null && data.status == RacerStatus.Racing)
                 data.inputSource.InputLocked = false;
         }
@@ -394,22 +452,21 @@ namespace FunRaceParkour
         {
             StopAllCoroutines();
             _finishedCount = 0;
+            _nextFinishOrder = 0;
             RaceTimer      = 0f;
 
             foreach (var d in Racers)
             {
                 d.ResetForRace();
-                if (d.controller != null)
-                    d.controller.ResetForRace(d.spawnPosition, d.spawnRotation);
+                RacerSetup.ResetBody(d, d.spawnPosition, d.spawnRotation);
                 LockRacer(d, true);
             }
 
-            // Reset obstacle states via message
-            var obstacles = FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None);
+            var obstacles = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             foreach (var o in obstacles)
                 if (o is IResettableObstacle ro) ro.ResetState();
 
-            if (raceHUD != null) raceHUD.HideResults();
+            if (raceHUD != null) raceHUD.Initialise(Racers);
             StartCoroutine(CountdownRoutine());
         }
 

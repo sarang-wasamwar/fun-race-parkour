@@ -32,7 +32,11 @@ namespace FunRaceParkour
 
         private void Update()
         {
-            if (_respawning) return;
+            if (_respawning)
+            {
+                if (transform.position.y >= yThreshold) _respawning = false;
+                return;
+            }
             if (transform.position.y < yThreshold)
                 TriggerRespawn();
         }
@@ -45,7 +49,6 @@ namespace FunRaceParkour
 
             if (data != null)
             {
-                data.falls++;
                 rm.RequestRespawn(data);
             }
             else
@@ -63,10 +66,6 @@ namespace FunRaceParkour
             if (_controller != null && vCam != null)
                 _controller.ResetCameraRotation(90f);
 
-            // Allow re-trigger after short delay
-            Invoke(nameof(ClearRespawning), 0.5f);
         }
-
-        private void ClearRespawning() => _respawning = false;
     }
 }

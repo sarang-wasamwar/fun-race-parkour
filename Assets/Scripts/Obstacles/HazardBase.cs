@@ -43,9 +43,14 @@ namespace FunRaceParkour
             TryHitRacer(other.gameObject, impactImpulse);
         }
 
-        protected void TryHitRacer(GameObject go, Vector3 impulse)
+        protected virtual void OnCollisionEnter(Collision col)
         {
-            var receiver = go.GetComponent<IHazardReceiver>();
+            TryHitRacer(col.gameObject, impactImpulse);
+        }
+
+        public void TryHitRacer(GameObject go, Vector3 impulse)
+        {
+            var receiver = go.GetComponentInParent<IHazardReceiver>();
             if (receiver == null) return;
             receiver.ApplyImpact(impulse, stunDuration);
         }

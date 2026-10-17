@@ -23,6 +23,7 @@ namespace FunRaceParkour.Tests
             Debug.Log("<color=#4FC3F7><b>[TestRunner] Starting Fun Race & Parkour test suite...</b></color>");
 
             RunSuite("Jump Math & Kinematics", JumpMathTests.RunAll, ref suitesPassed, ref suitesFailed);
+            RunSuite("Race Ranking", RaceRankingTests.RunAll, ref suitesPassed, ref suitesFailed);
             RunSuite("Progression & Unlocks",  ProgressionServiceTests.RunAll, ref suitesPassed, ref suitesFailed);
             RunSuite("Hazard Prediction",     HazardPredictionTests.RunAll, ref suitesPassed, ref suitesFailed);
             RunSuite("Track & Gap Safety",    TrackValidationTests.RunAll, ref suitesPassed, ref suitesFailed);

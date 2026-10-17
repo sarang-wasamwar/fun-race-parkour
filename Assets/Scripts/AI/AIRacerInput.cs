@@ -10,12 +10,14 @@ using UnityEngine;
 
 namespace FunRaceParkour
 {
-    [RequireComponent(typeof(ThirdPersonControllerExtended))]
+    [RequireComponent(typeof(CharacterController))]
     public class AIRacerInput : MonoBehaviour, IRacerInput
     {
         // ── Profile ────────────────────────────────────────────────────────
         [SerializeField, Tooltip("Personality profile (reaction time, error ranges, etc.)")]
         private AIRacerProfile profile;
+
+        public void SetProfile(AIRacerProfile value) => profile = value;
 
         // ── IRacerInput ────────────────────────────────────────────────────
         public float Move       { get; private set; }
@@ -29,8 +31,17 @@ namespace FunRaceParkour
         public void ConsumeJump() => Jump = false;
 
         // ── Runtime state ──────────────────────────────────────────────────
-        private ThirdPersonControllerExtended _ctrl;
+        private ThirdPersonControllerExtended _ext;
+        private StarterAssets.ThirdPersonController _tpc;
         private bool _inputLocked;
+
+        private float MotorSpeed => _ext != null ? _ext.MoveSpeed : (_tpc != null ? _tpc.MoveSpeed : 2f);
+        private float MotorJump => _ext != null ? _ext.JumpHeight : (_tpc != null ? _tpc.JumpHeight : 1.2f);
+        private float MotorGravity => _ext != null ? _ext.Gravity : (_tpc != null ? _tpc.Gravity : -15f);
+        private bool MotorGrounded => _ext != null ? _ext.Grounded : (_tpc != null && _tpc.Grounded);
+        private LayerMask MotorGround => _ext != null ? _ext.GroundLayers : (_tpc != null ? _tpc.GroundLayers : ~0);
+        private float MotorPathStartX => _ext != null ? _ext.PathStartX : (_tpc != null ? _tpc.PathStartX : 0f);
+        private float MotorPathEndX => _ext != null ? _ext.PathEndX : (_tpc != null ? _tpc.PathEndX : 1f);
 
         // Navigation state machine
         private enum NavState { MovingForward, WaitingForHazard, JumpApproach, Jumping, StuckRecovery }
@@ -88,7 +99,8 @@ namespace FunRaceParkour
         // ── Lifecycle ──────────────────────────────────────────────────────
         private void Awake()
         {
-            _ctrl = GetComponent<ThirdPersonControllerExtended>();
+            _ext = GetComponent<ThirdPersonControllerExtended>();
+            _tpc = GetComponent<StarterAssets.ThirdPersonController>();
         }
 
         private void Start()
@@ -105,9 +117,9 @@ namespace FunRaceParkour
 
         private void CachePhysicsConstants()
         {
-            _moveSpeed  = _ctrl.MoveSpeed;
-            _jumpHeight = _ctrl.JumpHeight;
-            _gravity    = _ctrl.Gravity;
+            _moveSpeed  = MotorSpeed;
+            _jumpHeight = MotorJump;
+            _gravity    = MotorGravity;
 
             _jumpDuration = ComputeJumpDuration(_jumpHeight, _gravity);
             _jumpReach    = _moveSpeed * _jumpDuration * (1f - (profile != null ? profile.safetyMargin : 0.15f));
@@ -119,8 +131,8 @@ namespace FunRaceParkour
             if (_inputLocked) { Move = 0f; Jump = false; return; }
 
             // Re-cache if controller values have changed
-            if (!Mathf.Approximately(_ctrl.MoveSpeed, _moveSpeed) ||
-                !Mathf.Approximately(_ctrl.JumpHeight, _jumpHeight))
+            if (!Mathf.Approximately(MotorSpeed, _moveSpeed) ||
+                !Mathf.Approximately(MotorJump, _jumpHeight))
                 CachePhysicsConstants();
 
             DetectStuck();
@@ -155,7 +167,7 @@ namespace FunRaceParkour
                     Move = 1f;
                     Jump = true; // held until consumed by controller
                     // Transition back once in the air
-                    if (!_ctrl.Grounded) _navState = NavState.MovingForward;
+                    if (!MotorGrounded) _navState = NavState.MovingForward;
                     break;
 
                 case NavState.StuckRecovery:
@@ -173,7 +185,7 @@ namespace FunRaceParkour
 
             for (int i = 0; i < count; i++)
             {
-                var hazard = _overlapBuffer[i].GetComponent<IPredictableHazard>();
+                var hazard = _overlapBuffer[i].GetComponentInParent<IPredictableHazard>();
                 if (hazard == null) continue;
 
                 float hx = _overlapBuffer[i].transform.position.x;
@@ -183,7 +195,10 @@ namespace FunRaceParkour
                 // Estimate cross time (how long to walk through the hazard)
                 float crossDist   = _overlapBuffer[i].bounds.size.x + 0.5f;
                 float crossDur    = crossDist / _moveSpeed;
-                float requiredDur = crossDur * (profile?.safeWindowMultiplier ?? 1.5f);
+                float windowMul = profile != null
+                    ? Mathf.Lerp(profile.safeWindowMultiplier, 1.1f, profile.riskTolerance)
+                    : 1.5f;
+                float requiredDur = crossDur * windowMul;
                 float distanceToHazard = hx - transform.position.x;
                 float timeToArrive     = distanceToHazard / _moveSpeed;
 
@@ -204,14 +219,14 @@ namespace FunRaceParkour
             // Forward raycast to detect gap (no ground ahead)
             float checkStep = 0.5f;
             float checkDist = _jumpReach * 1.5f;
-            float direction = _ctrl.PathEndX > _ctrl.PathStartX ? 1f : -1f;
+            float direction = MotorPathEndX > MotorPathStartX ? 1f : -1f;
 
             Vector3 startPos = transform.position + Vector3.right * direction * 0.5f;
             for (float d = checkStep; d <= checkDist; d += checkStep)
             {
                 Vector3 checkPos = startPos + Vector3.right * direction * d;
                 bool hasGround = Physics.Raycast(checkPos + Vector3.up * 0.2f, Vector3.down,
-                    _groundCheckDist + 0.5f, _ctrl.GroundLayers, QueryTriggerInteraction.Ignore);
+                    _groundCheckDist + 0.5f, MotorGround, QueryTriggerInteraction.Ignore);
 
                 if (!hasGround)
                 {
@@ -228,7 +243,7 @@ namespace FunRaceParkour
 
         private void CheckJumpTrigger()
         {
-            float direction = _ctrl.PathEndX > _ctrl.PathStartX ? 1f : -1f;
+            float direction = MotorPathEndX > MotorPathStartX ? 1f : -1f;
             float dx = (transform.position.x - _jumpTriggerX) * direction;
             if (dx >= 0f)
             {
@@ -240,7 +255,7 @@ namespace FunRaceParkour
         private void WaitForHazardWindow()
         {
             // Walk up to the standoff X
-            float direction = _ctrl.PathEndX > _ctrl.PathStartX ? 1f : -1f;
+            float direction = MotorPathEndX > MotorPathStartX ? 1f : -1f;
             float distToHazardEdge = (_hazardX - transform.position.x) * direction;
             if (distToHazardEdge > 0.3f)
             {
@@ -270,6 +285,13 @@ namespace FunRaceParkour
         // ── Stuck detection ────────────────────────────────────────────────
         private void DetectStuck()
         {
+            if (_navState == NavState.WaitingForHazard)
+            {
+                _stuckTimer = 0f;
+                _lastX = transform.position.x;
+                return;
+            }
+
             float dx = Mathf.Abs(transform.position.x - _lastX);
             if (dx < 0.02f)
             {
@@ -299,7 +321,7 @@ namespace FunRaceParkour
             if (!_backingUp)
             {
                 // Try a jump
-                if (_ctrl.Grounded && _stuckJumpCount < (profile?.maxJumpRetries ?? 2))
+                if (MotorGrounded && _stuckJumpCount < (profile?.maxJumpRetries ?? 2))
                 {
                     Jump = true;
                     _stuckJumpCount++;
@@ -309,7 +331,7 @@ namespace FunRaceParkour
                 {
                     // Back up briefly
                     _backingUp     = true;
-                    _recoveryTimer = 0.8f;
+                    _recoveryTimer = profile != null ? profile.recoveryDelay : 0.8f;
                 }
                 Move = 1f;
             }

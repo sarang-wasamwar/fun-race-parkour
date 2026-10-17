@@ -12,13 +12,15 @@ namespace FunRaceParkour.Tests
 {
     public static class TrackValidationTests
     {
-        private const float MoveSpeed   = 4.0f;
+        private const float MoveSpeed   = 2.0f;
         private const float JumpHeight  = 1.2f;
         private const float Gravity     = -15.0f;
         private const float Margin      = 0.15f;
 
         public static void RunAll()
         {
+            TestAssert.Greater(TrackObstacleFactory.LaneWidth, 2f * 1.5f + 1.5f,
+                "Platforms and hazards must span all three lanes with edge margin.");
             float maxSafeGap = AIRacerInput.ComputeJumpReach(MoveSpeed, JumpHeight, Gravity, Margin);
 
             ValidateLayout("Level 1 (Training Run)", LevelBuilder.Level1Layout, maxSafeGap);

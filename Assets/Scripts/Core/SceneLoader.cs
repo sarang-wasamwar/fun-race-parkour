@@ -30,7 +30,18 @@ namespace FunRaceParkour
         }
 
         public void LoadMainMenu()   => LoadScene("MainMenu");
-        public void LoadLevel(int i) => LoadScene("Level" + (i + 1) + "_" + LevelName(i));
+        public void LoadLevel(int i)
+        {
+            i = Mathf.Clamp(i, 0, 2);
+            if (GameSession.Instance != null) GameSession.Instance.SelectedLevel = i;
+            LoadScene("Level" + (i + 1) + "_" + LevelName(i));
+        }
+
+        public void LoadLevelSelection()
+        {
+            if (GameSession.Instance != null) GameSession.Instance.OpenLevelSelectOnMenu = true;
+            LoadMainMenu();
+        }
 
         private static string LevelName(int i) => i switch
         {

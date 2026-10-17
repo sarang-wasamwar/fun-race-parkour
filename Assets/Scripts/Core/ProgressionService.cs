@@ -63,6 +63,10 @@ namespace FunRaceParkour
         /// </summary>
         public void OnPlayerFinished(int levelIndex, float finishTime)
         {
+            if (levelIndex < 0 || levelIndex >= TotalLevels || float.IsNaN(finishTime) ||
+                float.IsInfinity(finishTime) || finishTime < 0f)
+                return;
+
             SetBestTime(levelIndex, finishTime);
 
             int next = levelIndex + 1;

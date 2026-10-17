@@ -8,6 +8,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using StarterAssets;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace FunRaceParkour
 {
@@ -30,7 +33,9 @@ namespace FunRaceParkour
 
         private void Awake()
         {
-            // Find player input on the scene's player
+            if (resumeButton == null)
+                BuildDefaultUi();
+
             var player = GameObject.FindGameObjectWithTag("Player");
             if (player != null) _playerInput = player.GetComponent<StarterAssetsInputs>();
 
@@ -52,7 +57,13 @@ namespace FunRaceParkour
 
         private void Update()
         {
-            if (Input.GetKeyDown(pauseKey))
+            bool pressed;
+#if ENABLE_INPUT_SYSTEM
+            pressed = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+#else
+            pressed = Input.GetKeyDown(pauseKey);
+#endif
+            if (pressed)
             {
                 if (_isPaused) Resume(); else Pause();
             }
@@ -101,7 +112,7 @@ namespace FunRaceParkour
             Time.timeScale = 1f;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible   = true;
-            SceneLoader.Instance?.LoadScene("MainMenu");
+            SceneLoader.Instance?.LoadLevelSelection();
         }
 
         private void DoMainMenu()
@@ -110,6 +121,38 @@ namespace FunRaceParkour
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible   = true;
             SceneLoader.Instance?.LoadMainMenu();
+        }
+
+        private void BuildDefaultUi()
+        {
+            var canvas = GetComponent<Canvas>();
+            if (canvas == null)
+            {
+                canvas = gameObject.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 200;
+                var scaler = gameObject.AddComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1920, 1080);
+                gameObject.AddComponent<GraphicRaycaster>();
+            }
+
+            pausePanel = RuntimeUiFactory.Panel(transform, "PausePanel", new Color(0f, 0f, 0f, 0.7f)).gameObject;
+            var title = RuntimeUiFactory.Label(pausePanel.transform, "Title", "PAUSED", 56,
+                TextAlignmentOptions.Center, Color.white);
+            RuntimeUiFactory.Anchor(title.rectTransform, new Vector2(0.5f, 0.72f), new Vector2(0.5f, 0.72f),
+                new Vector2(500, 70), Vector2.zero);
+
+            resumeButton = RuntimeUiFactory.Button(pausePanel.transform, "Resume", "Resume", new Vector2(360, 56));
+            RuntimeUiFactory.Anchor(resumeButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.55f), new Vector2(0.5f, 0.55f), new Vector2(360, 56), Vector2.zero);
+            restartButton = RuntimeUiFactory.Button(pausePanel.transform, "Restart", "Restart Level", new Vector2(360, 56));
+            RuntimeUiFactory.Anchor(restartButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.45f), new Vector2(0.5f, 0.45f), new Vector2(360, 56), Vector2.zero);
+            levelSelectButton = RuntimeUiFactory.Button(pausePanel.transform, "Levels", "Level Selection", new Vector2(360, 56));
+            RuntimeUiFactory.Anchor(levelSelectButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.35f), new Vector2(0.5f, 0.35f), new Vector2(360, 56), Vector2.zero);
+            mainMenuButton = RuntimeUiFactory.Button(pausePanel.transform, "Menu", "Main Menu", new Vector2(360, 56));
+            RuntimeUiFactory.Anchor(mainMenuButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.25f), new Vector2(0.5f, 0.25f), new Vector2(360, 56), Vector2.zero);
+
+            pausePanel.SetActive(false);
         }
     }
 }

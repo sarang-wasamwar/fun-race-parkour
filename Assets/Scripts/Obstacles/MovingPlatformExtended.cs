@@ -14,16 +14,17 @@ namespace FunRaceParkour
     public class MovingPlatformExtended : MonoBehaviour, IResettableObstacle
     {
         [Header("Movement")]
-        [SerializeField] private Transform pointA;
-        [SerializeField] private Transform pointB;
-        [SerializeField, Range(0.5f, 20f)] private float speed = 2f;
-        [SerializeField, Range(0f, 2f)] private float pauseAtEnds = 0.3f;
+        [SerializeField, Tooltip("First endpoint of the platform path.")] private Transform pointA;
+        [SerializeField, Tooltip("Second endpoint of the platform path.")] private Transform pointB;
+        [SerializeField, Range(0.5f, 20f), Tooltip("Travel speed in units per second.")] private float speed = 2f;
+        [SerializeField, Range(0f, 2f), Tooltip("Pause duration at each endpoint.")] private float pauseAtEnds = 0.3f;
 
         private Rigidbody  _rb;
         private Vector3    _startA;
         private Vector3    _startB;
         private float      _period;
         private Vector3    _previousPos;
+        private float      _startTime;
 
         // Riders: CharacterControllers standing on this platform
         private readonly List<CharacterController> _riders = new();
@@ -55,11 +56,12 @@ namespace FunRaceParkour
             float dist = Vector3.Distance(_startA, _startB);
             _period = dist > 0f ? (dist / speed) * 2f + pauseAtEnds * 2f : 4f;
             _previousPos = _startA;
+            _startTime = Time.fixedTime;
         }
 
         private void FixedUpdate()
         {
-            Vector3 newPos = ComputePosition(Time.fixedTime);
+            Vector3 newPos = ComputePosition(Time.fixedTime - _startTime);
             FrameDelta     = newPos - _previousPos;
             _rb.MovePosition(newPos);
             _previousPos = newPos;
@@ -105,6 +107,7 @@ namespace FunRaceParkour
         {
             _riders.Clear();
             FrameDelta   = Vector3.zero;
+            _startTime = Time.fixedTime;
             _previousPos = _startA;
             if (_rb != null) _rb.MovePosition(_startA);
         }

@@ -11,9 +11,9 @@ namespace FunRaceParkour
     public class DisappearingPlatform : MonoBehaviour, IResettableObstacle, IPredictableHazard
     {
         [Header("Disappearing Platform")]
-        [SerializeField, Range(0.3f, 10f)] private float stayTime  = 1.5f;
-        [SerializeField, Range(0.3f, 10f)] private float goneTime  = 2.0f;
-        [SerializeField, Range(0.1f, 2f)]  private float warnTime  = 0.4f; // flash before vanish
+        [SerializeField, Range(0.3f, 10f), Tooltip("Solid time after first contact.")] private float stayTime = 1.5f;
+        [SerializeField, Range(0.3f, 10f), Tooltip("Time before the platform reappears.")] private float goneTime = 2.0f;
+        [SerializeField, Range(0.1f, 2f), Tooltip("Warning duration before the platform vanishes.")] private float warnTime = 0.4f;
 
         [SerializeField] private Renderer platformRenderer;
         [SerializeField] private Collider platformCollider;
@@ -109,7 +109,8 @@ namespace FunRaceParkour
         // For AI: "is it safe to step on at timeFromNow for crossDuration?"
         public bool IsSafeAt(float xPosition, float timeFromNow, float crossDuration)
         {
-            if (!_hasContact && _state == PlatformState.Solid) return true; // pristine
+            if (!_hasContact && _state == PlatformState.Solid)
+                return stayTime - warnTime >= crossDuration;
 
             float now  = Time.time;
             float when = now + timeFromNow;
@@ -134,7 +135,8 @@ namespace FunRaceParkour
 
         public float NextSafeWindow(float xPosition, float crossDuration, float searchHorizon = 10f)
         {
-            if (!_hasContact && _state == PlatformState.Solid) return 0f;
+            if (!_hasContact && _state == PlatformState.Solid)
+                return stayTime - warnTime >= crossDuration ? 0f : -1f;
 
             float now = Time.time;
 
@@ -151,7 +153,7 @@ namespace FunRaceParkour
                 float safeRemaining = _timer - warnTime;
                 if (safeRemaining >= crossDuration) return 0f; // safe now
                 // Wait for next cycle
-                float nextCycle = _timer + goneTime;
+                float nextCycle = _timer + warnTime + goneTime;
                 float nextSafe  = stayTime - warnTime;
                 if (nextSafe >= crossDuration) return nextCycle;
             }

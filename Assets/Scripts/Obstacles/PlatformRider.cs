@@ -1,6 +1,6 @@
 // PlatformRider.cs
 // Attach to every racer. Uses OnControllerColliderHit to detect when standing
-// on a MovingPlatformExtended and registers as a rider so the platform carries them.
+// on a moving platform and registers as a rider so the platform carries them.
 
 using UnityEngine;
 
@@ -11,6 +11,7 @@ namespace FunRaceParkour
     {
         private CharacterController _cc;
         private MovingPlatformExtended _currentPlatform;
+        private global::MovingPlatform _currentLegacyPlatform;
 
         private void Awake() => _cc = GetComponent<CharacterController>();
 
@@ -20,36 +21,52 @@ namespace FunRaceParkour
             if (hit.moveDirection.y >= -0.1f) return;
 
             var platform = hit.collider.GetComponent<MovingPlatformExtended>();
+            var legacyPlatform = hit.collider.GetComponent<global::MovingPlatform>();
 
             if (platform != null && platform != _currentPlatform)
             {
-                _currentPlatform?.RemoveRider(_cc);
+                RemoveCurrentPlatform();
                 _currentPlatform = platform;
                 platform.AddRider(_cc);
             }
-            else if (platform == null && _currentPlatform != null)
+            else if (legacyPlatform != null && legacyPlatform != _currentLegacyPlatform)
             {
-                _currentPlatform.RemoveRider(_cc);
-                _currentPlatform = null;
+                RemoveCurrentPlatform();
+                _currentLegacyPlatform = legacyPlatform;
+                legacyPlatform.AddRider(_cc);
+            }
+            else if (platform == null && legacyPlatform == null)
+            {
+                RemoveCurrentPlatform();
             }
         }
 
         private void Update()
         {
             // Detect when we've left the platform (no longer grounded on it)
-            // A simple grounded check: if controller is not touching ground, leave platform
-            var ctrl = GetComponent<ThirdPersonControllerExtended>();
-            if (ctrl != null && !ctrl.Grounded && _currentPlatform != null)
+            bool isGrounded = true;
+            var ctrlExt = GetComponent<ThirdPersonControllerExtended>();
+            if (ctrlExt != null) isGrounded = ctrlExt.Grounded;
+            else
             {
-                _currentPlatform.RemoveRider(_cc);
-                _currentPlatform = null;
+                var ctrl = GetComponent<StarterAssets.ThirdPersonController>();
+                if (ctrl != null) isGrounded = ctrl.Grounded;
             }
+
+            if (!isGrounded) RemoveCurrentPlatform();
         }
 
         private void OnDisable()
         {
+            RemoveCurrentPlatform();
+        }
+
+        private void RemoveCurrentPlatform()
+        {
             _currentPlatform?.RemoveRider(_cc);
+            _currentLegacyPlatform?.RemoveRider(_cc);
             _currentPlatform = null;
+            _currentLegacyPlatform = null;
         }
     }
 }

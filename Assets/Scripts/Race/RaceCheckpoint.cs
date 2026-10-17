@@ -28,14 +28,15 @@ namespace FunRaceParkour
         private void OnTriggerEnter(Collider other)
         {
             var rm = RaceManager.Instance;
-            if (rm == null) return;
+            if (rm == null || rm.State != RaceState.Racing) return;
             var data = rm.GetRacerData(other.gameObject);
             if (data == null) return;
             if (data.checkpointIndex >= checkpointIndex) return; // already passed
 
             data.checkpointIndex  = checkpointIndex;
-            data.lastCheckpointPos = respawnPoint != null ? respawnPoint.position : transform.position;
-            data.lastCheckpointRot = respawnPoint != null ? respawnPoint.rotation : transform.rotation;
+            data.lastCheckpointPos = respawnPoint != null ? respawnPoint.position : transform.position + Vector3.left * 2.5f;
+            data.lastCheckpointPos.z = data.racerObject.transform.position.z;
+            data.lastCheckpointRot = data.racerObject.transform.rotation;
 
             rm.OnCheckpointReached(data, checkpointIndex);
         }

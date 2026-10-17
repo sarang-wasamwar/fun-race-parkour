@@ -19,6 +19,7 @@ namespace StarterAssets
 
         private ThirdPersonController _thirdPersonController;
         public AudioClip respawnSound;
+        private bool _busy;
 
 
         private void Start()
@@ -44,11 +45,27 @@ namespace StarterAssets
 
         private void Update()
         {
-            // Check if the player's Y position has fallen below the threshold
-            if (transform.position.y < yThreshold)
+            if (transform.position.y >= yThreshold)
             {
-                Respawn();
+                _busy = false;
+                return;
             }
+            if (_busy) return;
+
+            var race = FunRaceParkour.RaceManager.Instance;
+            if (race != null)
+            {
+                var data = race.GetRacerData(gameObject);
+                if (data != null)
+                {
+                    _busy = true;
+                    PlayRespawnSound();
+                    race.RequestRespawn(data);
+                    return;
+                }
+            }
+
+            Respawn();
         }
 
         private void Respawn()
@@ -77,9 +94,22 @@ namespace StarterAssets
         thirdPersonController.ResetCameraRotation(90f); // Reset camera's Y rotation to 90 degrees
     }
 
-    AudioSource.PlayClipAtPoint(respawnSound, transform.position);
+    PlayRespawnSound();
 
 }
+
+        private void PlayRespawnSound()
+        {
+            if (respawnSound == null)
+            {
+                FunRaceParkour.AudioManager.Instance?.PlayRespawn();
+                return;
+            }
+
+            var audio = FunRaceParkour.AudioManager.Instance;
+            if (audio != null) audio.PlaySFXAtPosition(respawnSound, transform.position);
+            else AudioSource.PlayClipAtPoint(respawnSound, transform.position);
+        }
 
         private void ResetVerticalVelocity()
         {

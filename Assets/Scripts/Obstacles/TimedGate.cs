@@ -9,9 +9,9 @@ namespace FunRaceParkour
     public class TimedGate : MonoBehaviour, IResettableObstacle, IPredictableHazard
     {
         [Header("Timed Gate")]
-        [SerializeField, Range(0.2f, 10f)] private float openTime   = 2f;
-        [SerializeField, Range(0.2f, 10f)] private float closedTime = 2f;
-        [SerializeField] private float phaseOffset = 0f;
+        [SerializeField, Range(0.2f, 10f), Tooltip("Seconds the gate stays open per cycle.")] private float openTime = 2f;
+        [SerializeField, Range(0.2f, 10f), Tooltip("Seconds the gate stays closed per cycle.")] private float closedTime = 2f;
+        [SerializeField, Tooltip("Offset in seconds from the cycle start.")] private float phaseOffset = 0f;
 
         [SerializeField] private GameObject gateGeometry;  // the wall object
         [SerializeField] private Collider   gateCollider;
@@ -21,12 +21,14 @@ namespace FunRaceParkour
 
         private Renderer _renderer;
         private bool _isOpen;
+        private float _startTime;
 
         private void Awake()
         {
             if (gateGeometry == null) gateGeometry = gameObject;
             if (gateCollider == null) gateCollider = GetComponent<Collider>();
             _renderer = gateGeometry.GetComponent<Renderer>();
+            _startTime = Time.time;
         }
 
         private void Update()
@@ -38,7 +40,7 @@ namespace FunRaceParkour
         private bool GateIsOpen(float t)
         {
             float period = openTime + closedTime;
-            float phase  = ((t + phaseOffset) % period);
+            float phase  = ((t - _startTime + phaseOffset) % period);
             return phase < openTime;
         }
 
@@ -82,6 +84,7 @@ namespace FunRaceParkour
         // ── IResettableObstacle ───────────────────────────────────────────
         public void ResetState()
         {
+            _startTime = Time.time;
             _isOpen = false;
             SetOpen(GateIsOpen(Time.time));
         }

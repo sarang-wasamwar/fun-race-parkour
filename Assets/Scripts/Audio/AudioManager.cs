@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace FunRaceParkour
 {
+    [DefaultExecutionOrder(-100)]
     public class AudioManager : MonoBehaviour
     {
         public static AudioManager Instance { get; private set; }
@@ -18,6 +19,10 @@ namespace FunRaceParkour
         [Header("Audio Sources")]
         [SerializeField] private AudioSource musicSource;
         [SerializeField] private AudioSource sfxSource;
+
+        [Header("Default Music")]
+        [SerializeField, Tooltip("Optional loop started automatically when the service is created.")]
+        private AudioClip defaultMusicClip;
 
         [Header("Default Sound Cues (Optional)")]
         [SerializeField] private AudioClip countdownTickClip;
@@ -45,6 +50,7 @@ namespace FunRaceParkour
 
             EnsureSources();
             LoadVolumeSettings();
+            PlayMusic(defaultMusicClip);
         }
 
         private void EnsureSources()

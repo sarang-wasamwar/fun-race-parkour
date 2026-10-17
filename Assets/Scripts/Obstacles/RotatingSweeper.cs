@@ -33,6 +33,7 @@ namespace FunRaceParkour
 
         private Rigidbody _rb;
         private Quaternion _initialRotation;
+        private float _startTime;
 
         private void Awake()
         {
@@ -40,20 +41,39 @@ namespace FunRaceParkour
             _rb.isKinematic   = true;
             _rb.interpolation = RigidbodyInterpolation.Interpolate;
             _initialRotation  = transform.rotation;
+            _startTime = Time.time;
         }
 
         private void FixedUpdate()
         {
-            float angle = ComputeAngle(Time.fixedTime);
+            float angle = ComputeAngle(Time.time - _startTime);
             _rb.MoveRotation(_initialRotation * Quaternion.AngleAxis(angle, axis));
         }
 
-        private void OnCollisionEnter(Collision col) => TryHitRacer(col.gameObject, impactImpulse);
+        protected override void OnCollisionEnter(Collision col)
+        {
+            base.OnCollisionEnter(col);
+        }
 
         // ── Deterministic angle ───────────────────────────────────────────
         private float ComputeAngle(float t)
         {
-            return (phaseOffset + degreesPerSecond * t) % 360f;
+            if (pauseEveryDegrees <= 0f || pauseDuration <= 0f || Mathf.Approximately(degreesPerSecond, 0f))
+            {
+                return (phaseOffset + degreesPerSecond * t) % 360f;
+            }
+
+            float speed = Mathf.Abs(degreesPerSecond);
+            float sign = Mathf.Sign(degreesPerSecond);
+            float moveTime = pauseEveryDegrees / speed;
+            float stepDuration = moveTime + pauseDuration;
+
+            float completedSteps = Mathf.Floor(t / stepDuration);
+            float stepTime = t - (completedSteps * stepDuration);
+            float moveProgress = Mathf.Min(stepTime, moveTime);
+            float angleMoved = (completedSteps * pauseEveryDegrees) + (moveProgress * speed);
+
+            return (phaseOffset + sign * angleMoved) % 360f;
         }
 
         // ── IPredictableHazard ────────────────────────────────────────────
@@ -72,7 +92,7 @@ namespace FunRaceParkour
             float now = Time.time;
             float step = 0.05f;
             for (float dt = timeFromNow; dt <= timeFromNow + crossDuration; dt += step)
-                if (!AngleIsSafe(ComputeAngle(now + dt))) return false;
+                if (!AngleIsSafe(ComputeAngle(now + dt - _startTime))) return false;
             return true;
         }
 
@@ -83,7 +103,7 @@ namespace FunRaceParkour
             float safeStart = -1f;
             for (float t = 0f; t <= searchHorizon; t += step)
             {
-                bool safe = AngleIsSafe(ComputeAngle(now + t));
+                bool safe = AngleIsSafe(ComputeAngle(now + t - _startTime));
                 if (safe && safeStart < 0f) safeStart = t;
                 else if (!safe && safeStart >= 0f)
                 {
@@ -98,6 +118,7 @@ namespace FunRaceParkour
         // ── IResettableObstacle ───────────────────────────────────────────
         public override void ResetState()
         {
+            _startTime = Time.time;
             if (_rb != null) _rb.MoveRotation(_initialRotation);
         }
     }

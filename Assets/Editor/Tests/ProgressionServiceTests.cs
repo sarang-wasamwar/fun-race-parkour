@@ -10,6 +10,20 @@ namespace FunRaceParkour.Tests
     {
         public static void RunAll()
         {
+            var hadUnlock = new bool[3];
+            var savedUnlock = new int[3];
+            var hadTime = new bool[3];
+            var savedTime = new float[3];
+            for (int i = 0; i < 3; i++)
+            {
+                string unlockKey = $"FRP_Unlocked_{i}";
+                string timeKey = $"FRP_BestTime_{i}";
+                hadUnlock[i] = PlayerPrefs.HasKey(unlockKey);
+                hadTime[i] = PlayerPrefs.HasKey(timeKey);
+                savedUnlock[i] = PlayerPrefs.GetInt(unlockKey);
+                savedTime[i] = PlayerPrefs.GetFloat(timeKey);
+            }
+
             var go = new GameObject("TestProgressionService");
             var service = go.AddComponent<ProgressionService>();
 
@@ -24,6 +38,16 @@ namespace FunRaceParkour.Tests
             {
                 service.ResetAll();
                 Object.DestroyImmediate(go);
+                for (int i = 0; i < 3; i++)
+                {
+                    string unlockKey = $"FRP_Unlocked_{i}";
+                    string timeKey = $"FRP_BestTime_{i}";
+                    if (hadUnlock[i]) PlayerPrefs.SetInt(unlockKey, savedUnlock[i]);
+                    else PlayerPrefs.DeleteKey(unlockKey);
+                    if (hadTime[i]) PlayerPrefs.SetFloat(timeKey, savedTime[i]);
+                    else PlayerPrefs.DeleteKey(timeKey);
+                }
+                PlayerPrefs.Save();
             }
         }
 
@@ -48,6 +72,11 @@ namespace FunRaceParkour.Tests
             // Finishing level 1 should unlock level 2
             service.OnPlayerFinished(1, 42.0f);
             TestAssert.IsTrue(service.IsUnlocked(2), "Level 3 must be unlocked after finishing Level 2.");
+
+            service.ResetAll();
+            service.OnPlayerFinished(0, float.NaN);
+            service.OnPlayerFinished(0, -1f);
+            TestAssert.IsFalse(service.IsUnlocked(1), "Invalid finish times must not unlock the next level.");
         }
 
         private static void TestBestTimeTracking(ProgressionService service)

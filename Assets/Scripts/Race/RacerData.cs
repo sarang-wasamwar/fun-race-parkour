@@ -19,8 +19,11 @@ namespace FunRaceParkour
         /// <summary>Reference to the racer's GameObject in the scene.</summary>
         [System.NonSerialized] public GameObject racerObject;
 
-        /// <summary>Controller reference (may be null for AI).</summary>
+        /// <summary>Extended controller when present (AI variant).</summary>
         [System.NonSerialized] public ThirdPersonControllerExtended controller;
+
+        /// <summary>Original Starter Assets controller when present (human default).</summary>
+        [System.NonSerialized] public StarterAssets.ThirdPersonController starterController;
 
         [System.NonSerialized] public IRacerInput inputSource;
 
@@ -34,6 +37,7 @@ namespace FunRaceParkour
         // ── timing ────────────────────────────────────────────────────────
         [System.NonSerialized] public float  elapsedTime;     // counts up while Racing
         [System.NonSerialized] public float  finishTime = -1; // only set when finish trigger crossed
+        [System.NonSerialized] public int    finishOrder = int.MaxValue;
         [System.NonSerialized] public int    finalRank;       // set after race concludes
 
         // ── spawn ─────────────────────────────────────────────────────────
@@ -53,6 +57,7 @@ namespace FunRaceParkour
             status           = RacerStatus.Racing;
             elapsedTime      = 0f;
             finishTime       = -1f;
+            finishOrder      = int.MaxValue;
             finalRank        = 0;
             lastCheckpointPos = spawnPosition;
             lastCheckpointRot = spawnRotation;

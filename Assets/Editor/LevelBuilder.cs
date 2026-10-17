@@ -13,6 +13,8 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
+using Unity.Cinemachine;
+using TMPro;
 
 namespace FunRaceParkour.Editor
 {
@@ -38,10 +40,60 @@ namespace FunRaceParkour.Editor
         [MenuItem("Tools/FunRace/Build All Levels")]
         public static void BuildAll()
         {
+            BuildAIRacerPrefab();
+            BuildMainMenuScene();
             BuildLevel(0);
             BuildLevel(1);
             BuildLevel(2);
+            UpdateBuildSettings();
             Debug.Log("[LevelBuilder] All levels built.");
+        }
+
+        [MenuItem("Tools/FunRace/Build AI Racer Prefab")]
+        public static void BuildAIRacerPrefab()
+        {
+            const string output = "Assets/Prefabs/AIRacer.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(output) != null) return;
+
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/PlayerRobot.prefab");
+            if (source == null)
+            {
+                Debug.LogError("[LevelBuilder] PlayerRobot.prefab not found; cannot create AIRacer variant.");
+                return;
+            }
+
+            var instance = PrefabUtility.InstantiatePrefab(source) as GameObject;
+            instance.name = "AIRacer";
+            RemoveComponent<StarterAssets.ThirdPersonController>(instance);
+            RemoveComponent<StarterAssets.StarterAssetsInputs>(instance);
+#if ENABLE_INPUT_SYSTEM
+            RemoveComponent<UnityEngine.InputSystem.PlayerInput>(instance);
+#endif
+            RemoveComponent<FunRaceParkour.PlayerRacerInput>(instance);
+            RemoveComponent<FunRaceParkour.RacerRespawnMonitor>(instance);
+            RemoveComponent<FunRaceParkour.ThirdPersonControllerExtended>(instance);
+            RemoveComponent<FunRaceParkour.AIRacerInput>(instance);
+            RemoveComponent<StarterAssets.RespawnPlayer>(instance);
+            instance.tag = "Untagged";
+
+            instance.AddComponent<FunRaceParkour.ThirdPersonControllerExtended>();
+            var ai = instance.AddComponent<FunRaceParkour.AIRacerInput>();
+            ai.SetProfile(AssetDatabase.LoadAssetAtPath<FunRaceParkour.AIRacerProfile>(
+                "Assets/ScriptableObjects/AI/AIRacer_Aggressive.asset"));
+            instance.AddComponent<FunRaceParkour.PlatformRider>();
+            instance.AddComponent<FunRaceParkour.PlatformContactReporter>();
+            instance.AddComponent<FunRaceParkour.RacerRespawnMonitor>();
+
+            PrefabUtility.SaveAsPrefabAssetAndConnect(instance, output, InteractionMode.AutomatedAction);
+            Object.DestroyImmediate(instance);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[LevelBuilder] Created AI prefab variant at {output}.");
+        }
+
+        private static void RemoveComponent<T>(GameObject go) where T : Component
+        {
+            var component = go.GetComponent<T>();
+            if (component != null) Object.DestroyImmediate(component, true);
         }
 
         [MenuItem("Tools/FunRace/Build Main Menu Scene")]
@@ -51,17 +103,13 @@ namespace FunRaceParkour.Editor
             var scene   = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // Minimal: a camera, EventSystem, and MainMenuController placeholder
-            CreateBasicCamera("MainMenuCamera", new Vector3(0, 5, -10));
             CreateEventSystem();
 
             var menuGO = new GameObject("MainMenu");
-            menuGO.AddComponent<FunRaceParkour.MainMenuController>();
+            var menuController = menuGO.AddComponent<FunRaceParkour.MainMenuController>();
+            ConfigureUiFont(menuController, "uiFont");
+            AddConfiguredAudioManager("MenuAudioManager");
             // Add persistent services
-            new GameObject("GameSession").AddComponent<FunRaceParkour.GameSession>();
-            new GameObject("ProgressionService").AddComponent<FunRaceParkour.ProgressionService>();
-            new GameObject("SceneLoader").AddComponent<FunRaceParkour.SceneLoader>();
-            new GameObject("AudioManager").AddComponent<FunRaceParkour.AudioManager>();
-
             EditorSceneManager.SaveScene(scene, path);
             Debug.Log($"[LevelBuilder] Main menu saved to {path}");
             UpdateBuildSettings();
@@ -82,6 +130,11 @@ namespace FunRaceParkour.Editor
                 else
                     Debug.LogWarning($"[LevelBuilder] Scene not found: {path} — run Build first.");
             }
+
+            var registered = new HashSet<string>();
+            foreach (var scene in scenes) registered.Add(scene.path);
+            foreach (var existing in EditorBuildSettings.scenes)
+                if (registered.Add(existing.path)) scenes.Add(existing);
 
             EditorBuildSettings.scenes = scenes.ToArray();
             Debug.Log($"[LevelBuilder] Build settings updated: {scenes.Count} scenes registered.");
@@ -112,11 +165,11 @@ namespace FunRaceParkour.Editor
 
         public static readonly ObstacleDesc[] Level1Layout =
         {
-            new() { type = "Gap",         x =  8f, param1 = 1.5f,  note = "Easy gap (1.5m)" },
+            new() { type = "Gap",         x =  8f, param1 = 1.0f,  note = "Easy jump" },
             new() { type = "Block",       x = 14f, param1 = 2f,    param2 = 4f, note = "Slow moving block" },
             new() { type = "Hammer",      x = 22f, param1 = 3.5f,  note = "Slow hammer, period=3.5s" },
             new() { type = "Checkpoint",  x = 27f },
-            new() { type = "Gap",         x = 32f, param1 = 1.8f,  note = "Second gap" },
+            new() { type = "Gap",         x = 32f, param1 = 1.0f,  note = "Second jump" },
             new() { type = "Hammer",      x = 38f, param1 = 4.0f,  note = "Second hammer" },
             new() { type = "MovPlatform", x = 44f, param1 = 1.5f,  note = "First moving platform" },
             new() { type = "Checkpoint",  x = 50f },
@@ -126,12 +179,12 @@ namespace FunRaceParkour.Editor
         public static readonly ObstacleDesc[] Level2Layout =
         {
             new() { type = "Hammer",      x =  8f, param1 = 2.5f, note = "Faster hammer" },
-            new() { type = "Gap",         x = 15f, param1 = 2.0f },
+            new() { type = "Gap",         x = 15f, param1 = 1.0f },
             new() { type = "Sweeper",     x = 20f, param1 = 90f,  note = "Rotating sweeper 90deg/s" },
             new() { type = "Checkpoint",  x = 25f },
             new() { type = "Gate",        x = 30f, param1 = 2f, param2 = 2f, note = "Timed gate 2/2" },
             new() { type = "MovPlatform", x = 36f, param1 = 2f,   note = "Moving platform" },
-            new() { type = "DisPlatform", x = 42f, param1 = 1.5f, note = "Disappearing platform" },
+            new() { type = "DisPlatform", x = 42f, param1 = 4.2f, note = "Disappearing platform" },
             new() { type = "Checkpoint",  x = 48f },
             new() { type = "Hammer",      x = 52f, param1 = 2.0f, note = "Fast hammer" },
             new() { type = "Sweeper",     x = 57f, param1 = 120f },
@@ -141,20 +194,20 @@ namespace FunRaceParkour.Editor
         public static readonly ObstacleDesc[] Level3Layout =
         {
             new() { type = "Sweeper",     x =  8f, param1 = 150f },
-            new() { type = "Gap",         x = 14f, param1 = 2.2f },
+            new() { type = "Gap",         x = 14f, param1 = 1.0f },
             new() { type = "Hammer",      x = 20f, param1 = 2.0f },
             new() { type = "Gate",        x = 25f, param1 = 1.5f, param2 = 1.5f },
             new() { type = "Checkpoint",  x = 30f },
             new() { type = "MovPlatform", x = 36f, param1 = 3f },
-            new() { type = "DisPlatform", x = 43f, param1 = 1.2f },
+            new() { type = "DisPlatform", x = 43f, param1 = 4.2f },
             new() { type = "MovPlatform", x = 50f, param1 = 2.5f },
             new() { type = "Checkpoint",  x = 55f },
             new() { type = "Sweeper",     x = 60f, param1 = 180f },
             new() { type = "Hammer",      x = 65f, param1 = 1.8f },
             new() { type = "Gate",        x = 70f, param1 = 1.2f, param2 = 1.8f },
-            new() { type = "DisPlatform", x = 76f, param1 = 1.0f },
+            new() { type = "DisPlatform", x = 76f, param1 = 4.2f },
             new() { type = "Checkpoint",  x = 80f },
-            new() { type = "Gap",         x = 85f, param1 = 2.5f },
+            new() { type = "Gap",         x = 85f, param1 = 1.0f },
             new() { type = "Finish",      x = 95f },
         };
 
@@ -170,8 +223,8 @@ namespace FunRaceParkour.Editor
             // Lighting
             SetupLighting(levelIndex);
 
-            // Ground plane
-            CreateGround(levelIndex);
+            // Build real floor segments so each validated gap is actually open.
+            CreateGround(levelIndex, layouts[levelIndex]);
 
             // Path markers
             var startPt = CreateMarker("StartPoint",  new Vector3(0f,   0f, 0f));
@@ -187,10 +240,10 @@ namespace FunRaceParkour.Editor
                         CreateCheckpointMarker(desc.x, cpIdx++);
                         break;
                     case "Finish":
-                        CreateFinishMarker(desc.x);
+                        CreateFinishMarker(desc.x, levelIndex);
                         break;
                     default:
-                        CreateObstacleMarker(desc);
+                        CreateObstacle(desc, _trackRoot.transform, levelIndex);
                         break;
                 }
             }
@@ -220,28 +273,50 @@ namespace FunRaceParkour.Editor
             return go;
         }
 
-        private static void CreateGround(int level)
+        private static GameObject _trackRoot;
+
+        private static Transform FindTrackRoot()
         {
-            // A long plane along X
-            float endX  = 100f;
-            var ground  = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ground.name = "Ground";
-            ground.transform.position = new Vector3(endX * 0.5f, -0.5f, 0f);
-            ground.transform.localScale = new Vector3(endX + 10f, 1f, 6f);
+            if (_trackRoot == null)
+            {
+                _trackRoot = new GameObject("_GeneratedTrack");
+                Undo.RegisterCreatedObjectUndo(_trackRoot, "Create generated track");
+            }
+            return _trackRoot.transform;
+        }
 
-            // Set layer for GroundLayers
-            ground.layer = LayerMask.NameToLayer("Default");
-
-            // Colour by level
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            mat.color = level switch
+        private static void CreateGround(int level, ObstacleDesc[] layout)
+        {
+            _trackRoot = new GameObject("_GeneratedTrack");
+            float endX = GetEndX(layout);
+            Color floorColor = level switch
             {
                 0 => new Color(0.4f, 0.9f, 1.0f),  // Training: cyan
                 1 => new Color(0.5f, 0.5f, 0.6f),  // Industrial: grey
                 2 => new Color(0.1f, 0.0f, 0.2f),  // Gauntlet: dark purple
                 _ => Color.grey
             };
-            ground.GetComponent<Renderer>().sharedMaterial = mat;
+            var openings = new List<ObstacleDesc>();
+            foreach (var d in layout)
+                if (d.type == "Gap" || d.type == "DisPlatform") openings.Add(d);
+            openings.Sort((a, b) => a.x.CompareTo(b.x));
+            float cursor = -5f;
+            foreach (var opening in openings)
+            {
+                float openingWidth = opening.type == "Gap" ? opening.param1 : 3.5f;
+                float left = opening.x - openingWidth * 0.5f;
+                CreateFloorSegment(cursor, left, floorColor);
+                cursor = opening.x + openingWidth * 0.5f;
+            }
+            CreateFloorSegment(cursor, endX + 5f, floorColor);
+        }
+
+        private static void CreateFloorSegment(float fromX, float toX, Color color)
+        {
+            if (toX <= fromX) return;
+            TrackObstacleFactory.Primitive(_trackRoot.transform, "TrackFloor", PrimitiveType.Cube,
+                new Vector3((fromX + toX) * 0.5f, -0.5f, 0f), new Vector3(toX - fromX, 1f, 6f),
+                Quaternion.identity, color);
         }
 
         private static void CreateCheckpointMarker(float x, int idx)
@@ -253,10 +328,13 @@ namespace FunRaceParkour.Editor
             col.size      = new Vector3(0.5f, 3f, 6f);
             var cp = go.AddComponent<FunRaceParkour.RaceCheckpoint>();
             cp.checkpointIndex = idx;
-            // respawnPoint: use the checkpoint transform itself
+            var respawn = new GameObject($"CheckpointRespawn_{idx}");
+            respawn.transform.SetParent(go.transform, false);
+            respawn.transform.localPosition = new Vector3(-2.5f, -0.9f, 0f);
+            cp.respawnPoint = respawn.transform;
         }
 
-        private static void CreateFinishMarker(float x)
+        private static void CreateFinishMarker(float x, int level)
         {
             var go = new GameObject("FinishLine");
             go.transform.position = new Vector3(x, 1f, 0f);
@@ -273,21 +351,29 @@ namespace FunRaceParkour.Editor
             var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             mat.color = new Color(1f, 0.84f, 0f); // gold
             arch.GetComponent<Renderer>().sharedMaterial = mat;
+
+            if (level == 2)
+                TrackObstacleFactory.Primitive(null, "FinalePlatform", PrimitiveType.Cube,
+                    new Vector3(x + 3f, -0.15f, 0f), new Vector3(8f, 0.3f, 6f), Quaternion.identity,
+                    new Color(0.7f, 0.1f, 1f));
         }
 
-        private static void CreateObstacleMarker(ObstacleDesc desc)
+        private static void CreateObstacle(ObstacleDesc desc, Transform parent, int level)
         {
-            // Create a placeholder cube at the right position.
-            // In the actual game, these are replaced by configured prefabs.
-            var go = new GameObject($"{desc.type}_{desc.x:F0}m");
-            go.transform.position = new Vector3(desc.x, 1f, 0f);
-
-            // Add a note component or tag
-            var note = go.AddComponent<ObstaclePlaceholderNote>();
-            note.obstacleType = desc.type;
-            note.param1       = desc.param1;
-            note.param2       = desc.param2;
-            note.description  = desc.note;
+            if (parent == null) parent = FindTrackRoot();
+            Vector3 pos = new Vector3(desc.x, 0f, 0f);
+            Color accent = level == 0 ? new Color(0.1f, 0.45f, 1f) :
+                level == 1 ? new Color(1f, 0.35f, 0.08f) : new Color(0.9f, 0.1f, 1f);
+            switch (desc.type)
+            {
+                case "Gap": TrackObstacleFactory.CreateGap(parent, pos, desc.param1); break;
+                case "Block": TrackObstacleFactory.CreateMovingBlock(parent, pos, accent, desc.param1); break;
+                case "Hammer": TrackObstacleFactory.CreateSwingingHammer(parent, pos, accent, desc.param1); break;
+                case "Sweeper": TrackObstacleFactory.CreateRotatingSweeper(parent, pos, accent, desc.param1); break;
+                case "Gate": TrackObstacleFactory.CreateTimedGate(parent, pos, accent, desc.param1, desc.param2); break;
+                case "DisPlatform": TrackObstacleFactory.CreateDisappearingPlatform(parent, pos, accent, desc.param1, 1.5f); break;
+                case "MovPlatform": TrackObstacleFactory.CreateMovingPlatform(parent, pos, accent, desc.param1, 3f); break;
+            }
         }
 
         private static void CreateSpawnMarkers(float startX)
@@ -304,8 +390,17 @@ namespace FunRaceParkour.Editor
         {
             var camGO = new GameObject(name);
             camGO.transform.position = pos;
-            camGO.transform.rotation = Quaternion.Euler(15f, 0f, 0f);
+            camGO.tag = "MainCamera";
+            camGO.transform.rotation = Quaternion.Euler(12f, -90f, 0f);
             camGO.AddComponent<Camera>();
+            camGO.AddComponent<CinemachineBrain>();
+
+            var vcamGO = new GameObject("RaceCamera");
+            var vcam = vcamGO.AddComponent<CinemachineCamera>();
+            vcamGO.AddComponent<CinemachineThirdPersonFollow>();
+            var fixedCamera = vcamGO.AddComponent<FunRaceParkour.FixedTrackCamera>();
+            fixedCamera.cameraDistance = 7f;
+            fixedCamera.trackYaw = 90f;
         }
 
         private static void CreateEventSystem()
@@ -322,11 +417,6 @@ namespace FunRaceParkour.Editor
             var rm   = rmGO.AddComponent<FunRaceParkour.RaceManager>();
 
             // Persistent services in level scene (they are DontDestroyOnLoad so this is just an initialiser)
-            new GameObject("SceneServices").AddComponent<FunRaceParkour.SceneLoader>();
-            new GameObject("GameSession").AddComponent<FunRaceParkour.GameSession>();
-            new GameObject("ProgressionService").AddComponent<FunRaceParkour.ProgressionService>();
-            new GameObject("AudioManager").AddComponent<FunRaceParkour.AudioManager>();
-
             var hudGO = new GameObject("RaceHUD");
             // RaceHUD requires Canvas — add placeholder
             var canvas = hudGO.AddComponent<Canvas>();
@@ -334,19 +424,61 @@ namespace FunRaceParkour.Editor
             hudGO.AddComponent<UnityEngine.UI.CanvasScaler>();
             hudGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
             var hud = hudGO.AddComponent<FunRaceParkour.RaceHUD>();
+            ConfigureUiFont(hud, "uiFont");
 
             var pauseGO = new GameObject("PauseMenu");
             pauseGO.AddComponent<FunRaceParkour.PauseMenu>();
+            AddConfiguredAudioManager("RaceAudioManager");
 
             var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/PlayerRobot.prefab");
+            var aiPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/AIRacer.prefab");
+            if (aiPrefab == null) aiPrefab = playerPrefab;
             var configs = new FunRaceParkour.RaceManager.RacerConfig[]
             {
-                new() { name = "AI Racer 1 (Ruby)", color = new Color(0.9f, 0.25f, 0.25f), prefab = playerPrefab, isPlayer = false },
+                new() { name = "AI Racer 1", color = new Color(0.9f, 0.25f, 0.25f), prefab = aiPrefab, isPlayer = false },
                 new() { name = "Player", color = new Color(0.2f, 0.6f, 1.0f), prefab = playerPrefab, isPlayer = true },
-                new() { name = "AI Racer 2 (Jade)", color = new Color(0.25f, 0.9f, 0.35f), prefab = playerPrefab, isPlayer = false },
+                new() { name = "AI Racer 2", color = new Color(0.25f, 0.9f, 0.35f), prefab = aiPrefab, isPlayer = false },
             };
 
             rm.ConfigureTrack(startPt.transform, endPt.transform, hud, configs);
+        }
+
+        private static void AddConfiguredAudioManager(string objectName)
+        {
+            var go = new GameObject(objectName);
+            var manager = go.AddComponent<FunRaceParkour.AudioManager>();
+            var serialized = new SerializedObject(manager);
+            SetClip(serialized, "defaultMusicClip", "Music_Exciting.ogg");
+            SetClip(serialized, "countdownTickClip", "SFX_PositiveSound01.ogg");
+            SetClip(serialized, "countdownGoClip", "SFX_PositiveSound01.ogg");
+            SetClip(serialized, "checkpointClip", "SFX_PositiveSound01.ogg");
+            SetClip(serialized, "finishClip", "SFX_PositiveSound01.ogg");
+            SetClip(serialized, "hazardHitClip", "SFX_AmbienceClose.ogg");
+            SetClip(serialized, "respawnClip", "SFX_Respawn.ogg");
+            SetClip(serialized, "buttonClickClip", "SFX_PositiveSound01.ogg");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void ConfigureUiFont(Object target, string propertyName)
+        {
+            var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/SourceFiles/Fonts/Inter-Variable SDF.asset");
+            if (font == null) return;
+            var serialized = new SerializedObject(target);
+            serialized.FindProperty(propertyName).objectReferenceValue = font;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetClip(SerializedObject serialized, string propertyName, string fileName)
+        {
+            string[] guids = AssetDatabase.FindAssets(System.IO.Path.GetFileNameWithoutExtension(fileName) + " t:AudioClip");
+            foreach (var guid in guids)
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (System.IO.Path.GetFileName(assetPath) != fileName) continue;
+                serialized.FindProperty(propertyName).objectReferenceValue =
+                    AssetDatabase.LoadAssetAtPath<AudioClip>(assetPath);
+                return;
+            }
         }
 
         private static void SetupLighting(int level)
@@ -377,31 +509,41 @@ namespace FunRaceParkour.Editor
             string path = EnsureSceneFolder() + sceneName + ".unity";
             if (!File.Exists(path)) { Debug.LogWarning($"[Validate] Scene not found: {path}"); return; }
 
-            var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
             int errors = 0;
 
             // Check gap sizes using the jump reach formula
-            float moveSpeed  = 4.0f;
+            float moveSpeed  = 2.0f;
             float jumpHeight = 1.2f;
             float gravity    = -15f;
             float margin     = 0.15f;
-            float maxSafeGap = FunRaceParkour.AIRacerInput.ComputeJumpReach(moveSpeed, jumpHeight, gravity, margin);
+            float maxSafeGap = FunRaceParkour.AIRacerInput.ComputeJumpReach(2f, jumpHeight, gravity, margin);
 
-            foreach (var go in scene.GetRootGameObjects())
+            ObstacleDesc[][] layouts = { Level1Layout, Level2Layout, Level3Layout };
+            int levelIndex = sceneName == SCENE_L1 ? 0 : sceneName == SCENE_L2 ? 1 : 2;
+            foreach (var desc in layouts[levelIndex])
             {
-                var notes = go.GetComponentsInChildren<ObstaclePlaceholderNote>();
-                foreach (var note in notes)
+                if (desc.type == "Gap" && desc.param1 >= maxSafeGap)
                 {
-                    if (note.obstacleType == "Gap" && note.param1 > maxSafeGap)
-                    {
-                        Debug.LogError($"[Validate] {sceneName}: Gap at {go.transform.position.x:F1}m = {note.param1}m exceeds max safe gap {maxSafeGap:F2}m");
-                        errors++;
-                    }
+                    Debug.LogError($"[Validate] {sceneName}: gap at {desc.x:F1}m is {desc.param1:F2}m; safe reach is {maxSafeGap:F2}m.");
+                    errors++;
                 }
             }
 
+            var checkpoints = Object.FindObjectsByType<FunRaceParkour.RaceCheckpoint>(FindObjectsSortMode.None);
+            var finishes = Object.FindObjectsByType<FunRaceParkour.FinishLine>(FindObjectsSortMode.None);
+            var managers = Object.FindObjectsByType<FunRaceParkour.RaceManager>(FindObjectsSortMode.None);
+            if (checkpoints.Length == 0) { Debug.LogError($"[Validate] {sceneName}: no checkpoints found."); errors++; }
+            if (finishes.Length != 1) { Debug.LogError($"[Validate] {sceneName}: expected one finish line; found {finishes.Length}."); errors++; }
+            if (managers.Length != 1) { Debug.LogError($"[Validate] {sceneName}: expected one RaceManager; found {managers.Length}."); errors++; }
+            if (TrackObstacleFactory.LaneWidth < 2f * 1.5f + 1.5f)
+            {
+                Debug.LogError($"[Validate] {sceneName}: obstacle lane coverage is too narrow.");
+                errors++;
+            }
+
             if (errors == 0)
-                Debug.Log($"[Validate] {sceneName}: All gaps valid. Max safe gap = {maxSafeGap:F2}m");
+                Debug.Log($"[Validate] {sceneName}: gaps, lane coverage, checkpoints, finish, and RaceManager are valid.");
         }
 
         // ── Helpers ───────────────────────────────────────────────────────

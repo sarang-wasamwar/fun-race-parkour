@@ -49,7 +49,7 @@ namespace FunRaceParkour
             _rb.isKinematic = true;
             _rb.interpolation = RigidbodyInterpolation.Interpolate;
             _initialRotation = transform.rotation;
-            _startTime = 0f; // will sync to time base in FixedUpdate
+            _startTime = Time.time;
         }
 
         private void Start()
@@ -61,13 +61,13 @@ namespace FunRaceParkour
 
         private void FixedUpdate()
         {
-            float angle = ComputeAngle(Time.fixedTime);
+            float angle = ComputeAngle(Time.time - _startTime);
             _rb.MoveRotation(_initialRotation * Quaternion.AngleAxis(angle, swingAxis));
         }
 
-        private void OnCollisionEnter(Collision col)
+        protected override void OnCollisionEnter(Collision col)
         {
-            TryHitRacer(col.gameObject, impactImpulse);
+            base.OnCollisionEnter(col);
         }
 
         // ── Angle function (deterministic) ────────────────────────────────
@@ -97,7 +97,7 @@ namespace FunRaceParkour
             float step    = 0.05f;
             for (float t = startT; t <= endT; t += step)
             {
-                float angle = Mathf.Abs(ComputeAngle(t));
+                float angle = Mathf.Abs(ComputeAngle(t - _startTime));
                 if (angle > dangerThreshold) return false;
             }
             return true;
@@ -111,7 +111,7 @@ namespace FunRaceParkour
 
             for (float t = 0f; t <= searchHorizon; t += step)
             {
-                bool safe = Mathf.Abs(ComputeAngle(now + t)) <= dangerThreshold;
+                bool safe = Mathf.Abs(ComputeAngle(now + t - _startTime)) <= dangerThreshold;
                 if (safe && safeStart < 0f) safeStart = t;
                 else if (!safe && safeStart >= 0f)
                 {
