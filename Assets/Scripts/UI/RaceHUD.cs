@@ -239,7 +239,6 @@ namespace FunRaceParkour
                             : "DNF";
                         if (txts.Length >= 4 && r.status == RacerStatus.Finished)
                         {
-                            var winner = sorted[0];
                             float gap = Mathf.Max(0f, r.finishTime - winner.finishTime);
                             txts[3].text = r == winner ? "WINNER" : $"+{gap:0.00}s";
                         }

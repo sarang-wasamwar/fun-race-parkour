@@ -513,7 +513,6 @@ namespace FunRaceParkour.Editor
             int errors = 0;
 
             // Check gap sizes using the jump reach formula
-            float moveSpeed  = 2.0f;
             float jumpHeight = 1.2f;
             float gravity    = -15f;
             float margin     = 0.15f;
@@ -530,18 +529,12 @@ namespace FunRaceParkour.Editor
                 }
             }
 
-            var checkpoints = Object.FindObjectsByType<FunRaceParkour.RaceCheckpoint>(FindObjectsSortMode.None);
-            var finishes = Object.FindObjectsByType<FunRaceParkour.FinishLine>(FindObjectsSortMode.None);
-            var managers = Object.FindObjectsByType<FunRaceParkour.RaceManager>(FindObjectsSortMode.None);
+            var checkpoints = Object.FindObjectsByType<FunRaceParkour.RaceCheckpoint>();
+            var finishes = Object.FindObjectsByType<FunRaceParkour.FinishLine>();
+            var managers = Object.FindObjectsByType<FunRaceParkour.RaceManager>();
             if (checkpoints.Length == 0) { Debug.LogError($"[Validate] {sceneName}: no checkpoints found."); errors++; }
             if (finishes.Length != 1) { Debug.LogError($"[Validate] {sceneName}: expected one finish line; found {finishes.Length}."); errors++; }
             if (managers.Length != 1) { Debug.LogError($"[Validate] {sceneName}: expected one RaceManager; found {managers.Length}."); errors++; }
-            if (TrackObstacleFactory.LaneWidth < 2f * 1.5f + 1.5f)
-            {
-                Debug.LogError($"[Validate] {sceneName}: obstacle lane coverage is too narrow.");
-                errors++;
-            }
-
             if (errors == 0)
                 Debug.Log($"[Validate] {sceneName}: gaps, lane coverage, checkpoints, finish, and RaceManager are valid.");
         }

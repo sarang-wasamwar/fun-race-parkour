@@ -13,7 +13,6 @@ public class BresenhamRobotMovement : MonoBehaviour
     public float speed = 3f;
 
     private List<Vector3> path = new List<Vector3>();
-    private int currentPoint = 0;
     private float fixedY;
     private float fixedZ;
 
@@ -52,7 +51,6 @@ public class BresenhamRobotMovement : MonoBehaviour
 
         // Start at PathStart
         transform.position = path[0];
-        currentPoint = 0;
     }
 
     void Update()

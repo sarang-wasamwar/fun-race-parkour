@@ -25,8 +25,10 @@ namespace FunRaceParkour
         [SerializeField] private Button levelSelectButton;
         [SerializeField] private Button mainMenuButton;
 
+#if !ENABLE_INPUT_SYSTEM
         [Header("Pause Input Key")]
         [SerializeField] private KeyCode pauseKey = KeyCode.Escape;
+#endif
 
         private bool _isPaused;
         private StarterAssetsInputs _playerInput;

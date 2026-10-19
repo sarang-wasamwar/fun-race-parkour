@@ -251,7 +251,10 @@ namespace FunRaceParkour
             if (player == null) return;
 
             var target = player.transform.Find("PlayerCameraRoot");
-            var vcam = FindFirstObjectByType<Unity.Cinemachine.CinemachineCamera>();
+            var fixedTrackCamera = FindAnyObjectByType<FixedTrackCamera>();
+            var vcam = fixedTrackCamera != null
+                ? fixedTrackCamera.GetComponent<Unity.Cinemachine.CinemachineCamera>()
+                : null;
             if (vcam != null && target != null)
                 vcam.Follow = target;
         }
@@ -462,7 +465,7 @@ namespace FunRaceParkour
                 LockRacer(d, true);
             }
 
-            var obstacles = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var obstacles = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude);
             foreach (var o in obstacles)
                 if (o is IResettableObstacle ro) ro.ResetState();
 

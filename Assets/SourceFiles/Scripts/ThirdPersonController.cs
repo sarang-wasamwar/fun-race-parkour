@@ -583,6 +583,8 @@ namespace StarterAssets
             return _input != null ? _input.move.y : 0f;
         }
 
+        private bool IsLocked() => _racerInput != null && _racerInput.InputLocked;
+
         private bool GetJumpInput()
         {
             if (_racerInput != null)

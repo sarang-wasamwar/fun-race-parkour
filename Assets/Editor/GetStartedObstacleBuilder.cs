@@ -9,12 +9,31 @@ namespace FunRaceParkour.Editor
 {
     public static class GetStartedObstacleBuilder
     {
-        private const string ParentName = "_Obstacles_Track";
+        private const string ParentName = "_Track_Obstacles";
+        private const string RequestFile = "Assets/Editor/GetStartedObstacleBuilder.request"; // one-shot editor request
+
+        [InitializeOnLoadMethod]
+        private static void BuildRequestedCourse()
+        {
+            if (!System.IO.File.Exists(RequestFile))
+                return;
+
+            System.IO.File.Delete(RequestFile);
+            if (SceneManager.GetActiveScene().name == "GetStarted_Scene")
+                Build();
+        }
 
         [MenuItem("Tools/FunRace/Build GetStarted Obstacle Course")]
         public static void Build()
         {
             Scene scene = SceneManager.GetActiveScene();
+            if (scene.name != "GetStarted_Scene")
+            {
+                string scenePath = "Assets/Scenes/GetStarted_Scene.unity";
+                if (System.IO.File.Exists(scenePath))
+                    scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            }
+
             if (scene.name != "GetStarted_Scene")
             {
                 EditorUtility.DisplayDialog(
@@ -60,7 +79,7 @@ namespace FunRaceParkour.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Selection.activeGameObject = parent;
-            Debug.Log("[GetStartedObstacleBuilder] Built 7 obstacles under _Obstacles_Track.");
+            Debug.Log("[GetStartedObstacleBuilder] Built 7 obstacles under _Track_Obstacles.");
         }
 
         private static Transform FindMarker(string markerName)
@@ -204,10 +223,10 @@ namespace FunRaceParkour.Editor
             GameObject obstacle = CreatePrimitive(
                 parent, "07_MovingPlatform", PrimitiveType.Cube, position,
                 new Vector3(4.0f, 0.45f, 3.5f), Quaternion.identity);
-            MovingPlatform platform = obstacle.AddComponent<MovingPlatform>();
-            platform.movementDirection = lateral;
-            platform.movementDistance = 5f;
-            platform.speed = 2.4f;
+            global::MovingPlatform platform = obstacle.AddComponent<global::MovingPlatform>();
+            Set(platform, "movementDirection", lateral);
+            Set(platform, "movementDistance", 5f);
+            Set(platform, "speed", 2.4f);
         }
 
         private static Transform CreateEndpoint(Transform parent, string name, Vector3 position)
@@ -221,8 +240,7 @@ namespace FunRaceParkour.Editor
 
         private static void AddRacerHelpers()
         {
-            CharacterController[] racers = Object.FindObjectsByType<CharacterController>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            CharacterController[] racers = Object.FindObjectsByType<CharacterController>(FindObjectsInactive.Include);
             foreach (CharacterController racer in racers)
             {
                 if (racer.GetComponent<PlatformRider>() == null)
