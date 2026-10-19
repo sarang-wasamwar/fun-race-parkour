@@ -1,15 +1,30 @@
 
 using UnityEngine;
+using System.Collections.Generic;
 
-public class MovingPlatform : MonoBehaviour
+public class MovingPlatform : MonoBehaviour, FunRaceParkour.IResettableObstacle
 {
-    public Vector3 movementDirection = Vector3.right;
-    public float movementDistance = 1f;
-    public float speed = 2f;
+    [SerializeField, Tooltip("Direction the platform travels in local world space.")]
+    private Vector3 movementDirection = Vector3.right;
+    [SerializeField, Tooltip("Distance travelled from the starting point.")]
+    private float movementDistance = 1f;
+    [SerializeField, Tooltip("Platform travel speed in units per second.")]
+    private float speed = 2f;
 
     private Vector3 startPosition;
     private Vector3 endPosition;
     private Vector3 previousPosition;
+    private readonly List<CharacterController> riders = new List<CharacterController>();
+
+    public void AddRider(CharacterController rider)
+    {
+        if (!riders.Contains(rider)) riders.Add(rider);
+    }
+
+    public void RemoveRider(CharacterController rider)
+    {
+        riders.Remove(rider);
+    }
 
     void Start()
     {
@@ -38,14 +53,20 @@ public class MovingPlatform : MonoBehaviour
             speed * Time.deltaTime
         );
 
-        // Calculate actual movement speed in units/second
-        float currentSpeed =
-            Vector3.Distance(transform.position, previousPosition)
-            / Time.deltaTime;
+        Vector3 frameDelta = transform.position - previousPosition;
+        foreach (CharacterController rider in riders)
+        {
+            if (rider != null && rider.enabled)
+                rider.Move(frameDelta);
+        }
 
         previousPosition = transform.position;
+    }
 
-        Debug.Log("Platform Speed: " + currentSpeed.ToString("F2")
-                  + " units/sec");
+    public void ResetState()
+    {
+        riders.Clear();
+        transform.position = startPosition;
+        previousPosition = startPosition;
     }
 }
